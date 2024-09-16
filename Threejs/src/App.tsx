@@ -21,7 +21,7 @@ const App: React.FC = () => {
     controls.dampingFactor = 0.05;
 
     // Update geometry creation
-    const geometry = new THREE.PlaneGeometry(2, 2, 32, 32);
+    const geometry = new THREE.SphereGeometry(1, 32, 32);
 
     // Update random attribute creation
     const count = geometry.attributes.position.count;
@@ -36,19 +36,20 @@ const App: React.FC = () => {
       attribute float random;
       varying float vRandom;
       uniform float time;
-
+      varying float elevation;
       void main() {
         vRandom = random;
         vec3 pos = position;
-        pos.z += random * 0.2;
+        pos.z +=  sin(time + random * 10.0) * 0.1;
+        elevation = pos.z;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
       }
     `;
     const fragmentShader = `
       varying float vRandom;
-
+      varying float elevation;
       void main() {
-        gl_FragColor = vec4(vRandom, 0.0, 0.0, 1.0);
+        gl_FragColor = vec4(1.0, elevation,0, 1.0);
       }
     `;
     const material = new THREE.ShaderMaterial({
@@ -60,8 +61,8 @@ const App: React.FC = () => {
     });
 
     // Create mesh and add to scene
-    const plane = new THREE.Mesh(geometry, material);
-    scene.add(plane);
+    const sphere = new THREE.Mesh(geometry, material);
+    scene.add(sphere);
 
     // Update camera position
     camera.position.z = 3;
