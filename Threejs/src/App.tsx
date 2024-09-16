@@ -21,7 +21,7 @@ const App: React.FC = () => {
     controls.dampingFactor = 0.05;
 
     // Create plane geometry
-    const geometry = new THREE.PlaneGeometry(2, 2, 128, 128);
+    const geometry = new THREE.PlaneGeometry(2, 2, 256, 256); // Increased resolution
 
     // Create shader material
     const vertexShader = `
@@ -30,16 +30,28 @@ const App: React.FC = () => {
       varying vec2 vUv;
       varying float vElevation;
 
+      // Simple pseudo-random function
+      float random(vec2 st) {
+        return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+      }
+
       void main() {
         vUv = uv;
         vec3 pos = position;
-        float distance = length(uv - mousePos)*0.5;
-        float elevation = sin(distance * 40.0 - time * 2.0) * 0.15;
-        elevation += sin(distance * 60.0 - time * 3.0) * 0.01;
-        elevation += sin(distance * 80.0 - time * 4.0) * 0.01;
+        
+        // Water waves
+        float distance = length(uv - mousePos);
+        float elevation = sin(distance * 10.0 - time * 2.0) * 0.1;
         elevation *= smoothstep(0.4, 0.0, distance);
-        pos.z += elevation*0.1;
-        vElevation = elevation;
+        
+        // Spikes
+        float spikeNoise = random(uv * 10.0 + time * 0.1);
+        float spike = pow(spikeNoise, 20.0) * 0.1; // Increased spike height and sharpness
+        
+        // Combine water waves and spikes
+        pos.z += elevation + spike;
+        vElevation = elevation + spike;
+        
         gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
       }
     `;
