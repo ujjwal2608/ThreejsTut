@@ -10,7 +10,7 @@ function Home(): ReactElement {
     // Set up scene, camera, and renderer
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer();
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     mountRef.current.appendChild(renderer.domElement);
 
@@ -18,15 +18,18 @@ function Home(): ReactElement {
     const vertexShader = `
       uniform float time;
       varying vec2 vUv;
-      varying vec3 vPosition;
+      varying float vElevation;
       
       void main() {
         vUv = uv;
         vec3 pos = position;
-        float wave1 = sin(pos.x * 2.0 + time * 0.8) * 0.1;
-        float wave2 = sin(pos.y * 1.8 + time * 0.6) * 0.1;
-        pos.z += wave1 + wave2;
-        vPosition = pos;
+        
+        float elevation = sin(pos.x * 3.0 + time * 0.7) * 0.1
+                        + sin(pos.y * 4.0 + time * 0.8) * 0.1;
+        
+        vElevation = elevation;
+        pos.z += elevation;
+        
         gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
       }
     `;
@@ -35,19 +38,18 @@ function Home(): ReactElement {
     const fragmentShader = `
       uniform float time;
       varying vec2 vUv;
-      varying vec3 vPosition;
+      varying float vElevation;
 
       void main() {
-        vec3 waterColor = vec3(0.0, 0.4, 0.8);
-        vec3 foamColor = vec3(1.0, 1.0, 1.0);
+        vec3 waterDeep = vec3(0.0, 0.2, 0.5);
+        vec3 waterShallow = vec3(0.0, 0.5, 0.8);
         
-        float wave = sin(vUv.x * 10.0 + vUv.y * 10.0 + time) * 0.5 + 0.5;
-        float foam = smoothstep(0.4, 0.6, wave);
+        float mixStrength = (vElevation + 0.1) * 5.0;
+        vec3 waterColor = mix(waterDeep, waterShallow, mixStrength);
         
-        vec3 finalColor = mix(waterColor, foamColor, foam);
-        float brightness = 0.7 + 0.3 * sin(vPosition.x * 5.0 + vPosition.y * 5.0 + time * 2.0);
+        float edge = 1.0 - smoothstep(0.8, 0.95, length(vUv * 2.0 - 1.0));
         
-        gl_FragColor = vec4(finalColor * brightness, 0.9);
+        gl_FragColor = vec4(waterColor, edge);
       }
     `;
 
@@ -61,15 +63,16 @@ function Home(): ReactElement {
       transparent: true,
     });
 
-    // Create plane geometry
-    const geometry = new THREE.PlaneGeometry(5, 5, 128, 128);
+    // Create circular plane geometry
+    const radius = 2;
+    const segments = 128;
+    const geometry = new THREE.CircleGeometry(radius, segments);
 
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.rotation.x = -Math.PI / 3; // Tilt the plane for a better view
+    mesh.rotation.x = -Math.PI / 2; // Rotate to lay flat
     scene.add(mesh);
 
-    camera.position.z = 3;
-    camera.position.y = 2;
+    camera.position.set(0, 3, 3);
     camera.lookAt(0, 0, 0);
 
     function animate() {
