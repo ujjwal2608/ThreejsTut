@@ -1,122 +1,97 @@
-import React, { useEffect, useRef, ReactElement } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
-function Home(): ReactElement {
+const App: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!mountRef.current) return;
 
-    // Set up scene, camera, and renderer
+    // Scene setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
     mountRef.current.appendChild(renderer.domElement);
 
-    // Moon surface vertex shader
+    // Add OrbitControls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; // Add smooth damping effect
+    controls.dampingFactor = 0.05;
+
+    // Update geometry creation
+    const geometry = new THREE.PlaneGeometry(2, 2, 32, 32);
+
+    // Update random attribute creation
+    const count = geometry.attributes.position.count;
+    const randomValues = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      randomValues[i] = Math.random();
+    }
+    geometry.setAttribute('random', new THREE.BufferAttribute(randomValues, 1));
+
+    // Create basic shader material
     const vertexShader = `
-      varying vec3 vNormal;
-      varying vec2 vUv;
-      varying float vDisplacement;
+      attribute float random;
+      varying float vRandom;
+      uniform float time;
 
-      // Pseudo-random number generator
-      float random(vec2 st) {
-        return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
-      }
-      
       void main() {
-        vNormal = normal;
-        vUv = uv;
-        
-        // Create crater displacement
-        float displacement = 0.0;
-        for (int i = 0; i < 5; i++) {
-          vec2 craterUv = vUv * 10.0 * float(i + 1);
-          float crater = smoothstep(0.9, 1.0, random(floor(craterUv)));
-          displacement -= crater * 0.2;
-        }
-        
-        vDisplacement = displacement;
-        
-        // Apply displacement to position
-        vec3 newPosition = position + normal * displacement;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+        vRandom = random;
+        vec3 pos = position;
+        pos.z += random * 0.2;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
       }
     `;
-
-    // Moon surface fragment shader
     const fragmentShader = `
-      varying vec3 vNormal;
-      varying vec2 vUv;
-      varying float vDisplacement;
+      varying float vRandom;
 
       void main() {
-        vec3 baseColor = vec3(0.8, 0.8, 0.75); // Light gray color for moon surface
-        vec3 craterColor = vec3(0.2, 0.2, 0.2); // Dark color for craters
-        
-        // Mix colors based on displacement
-        vec3 finalColor = mix(baseColor, craterColor, smoothstep(-0.02, -0.01, vDisplacement));
-        
-        // Add simple shading based on normal
-        float shading = dot(vNormal, normalize(vec3(1.0, 1.0, 1.0)));
-        finalColor *= (0.5 + 0.5 * shading);
-        
-        gl_FragColor = vec4(finalColor, 1.0);
+        gl_FragColor = vec4(vRandom, 0.0, 0.0, 1.0);
       }
     `;
-
-    // Create shader material
     const material = new THREE.ShaderMaterial({
-      fragmentShader,
-      vertexShader,
+      vertexShader: vertexShader,
+      fragmentShader: fragmentShader,
       uniforms: {
         time: { value: 0 }
-      },
+      }
     });
 
-    // Create sphere geometry
-    const radius = 2;
-    const segments = 128; // Increased for smoother surface
-    const geometry = new THREE.SphereGeometry(radius, segments, segments);
+    // Create mesh and add to scene
+    const plane = new THREE.Mesh(geometry, material);
+    scene.add(plane);
 
-    const mesh = new THREE.Mesh(geometry, material);
-    scene.add(mesh);
+    // Update camera position
+    camera.position.z = 3;
 
-    camera.position.z = 5;
-
-    function animate() {
+    // Animation loop
+    const animate = () => {
       requestAnimationFrame(animate);
-      
-      // Rotate the moon slowly
-      mesh.rotation.y += 0.005;
-      
-      // Update time uniform for potential animations
-      material.uniforms.time.value += 0.03;
-      
+      material.uniforms.time.value += 0.01;
+      controls.update(); // Update controls in the animation loop
       renderer.render(scene, camera);
-    }
-    
-    let animationFrameId: number;
-    function startAnimation() {
-      animationFrameId = requestAnimationFrame(animate);
-    }
-    startAnimation();
+    };
+    animate();
+
+    // Handle window resize
+    const handleResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener('resize', handleResize);
 
     // Clean up
     return () => {
-      cancelAnimationFrame(animationFrameId);
-      if (mountRef.current && renderer.domElement.parentNode === mountRef.current) {
-        mountRef.current.removeChild(renderer.domElement);
-      }
-      // Dispose of Three.js objects
-      geometry.dispose();
-      material.dispose();
-      renderer.dispose();
+      window.removeEventListener('resize', handleResize);
+      mountRef.current?.removeChild(renderer.domElement);
+      controls.dispose(); // Dispose of controls when component unmounts
     };
   }, []);
 
-  return <div ref={mountRef}></div>;
-}
+  return <div ref={mountRef} />;
+};
 
-export default Home;
+export default App;
