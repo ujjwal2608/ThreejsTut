@@ -106,7 +106,7 @@ function Home(): ReactElement {
     // Clean up
     return () => {
       cancelAnimationFrame(animationFrameId);
-      if (mountRef.current) {
+      if (mountRef.current && renderer.domElement.parentNode === mountRef.current) {
         mountRef.current.removeChild(renderer.domElement);
       }
       // Dispose of Three.js objects
