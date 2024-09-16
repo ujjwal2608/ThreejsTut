@@ -14,42 +14,55 @@ function Home(): ReactElement {
     renderer.setSize(window.innerWidth, window.innerHeight);
     mountRef.current.appendChild(renderer.domElement);
 
-    // Water wave vertex shader
+    // Moon surface vertex shader
     const vertexShader = `
-      uniform float time;
+      varying vec3 vNormal;
       varying vec2 vUv;
-      varying float vElevation;
+      varying float vDisplacement;
+
+      // Pseudo-random number generator
+      float random(vec2 st) {
+        return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+      }
       
       void main() {
+        vNormal = normal;
         vUv = uv;
-        vec3 pos = position;
         
-        float elevation = sin(pos.x * 3.0 + time * 0.7) * 0.1
-                        + sin(pos.y * 4.0 + time * 0.8) * 0.1;
+        // Create crater displacement
+        float displacement = 0.0;
+        for (int i = 0; i < 5; i++) {
+          vec2 craterUv = vUv * 10.0 * float(i + 1);
+          float crater = smoothstep(0.9, 1.0, random(floor(craterUv)));
+          displacement -= crater * 0.2;
+        }
         
-        vElevation = elevation;
-        pos.z += elevation;
+        vDisplacement = displacement;
         
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        // Apply displacement to position
+        vec3 newPosition = position + normal * displacement;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
       }
     `;
 
-    // Water wave fragment shader
+    // Moon surface fragment shader
     const fragmentShader = `
-      uniform float time;
+      varying vec3 vNormal;
       varying vec2 vUv;
-      varying float vElevation;
+      varying float vDisplacement;
 
       void main() {
-        vec3 waterDeep = vec3(0.0, 0.2, 0.5);
-        vec3 waterShallow = vec3(0.0, 0.5, 0.8);
+        vec3 baseColor = vec3(0.8, 0.8, 0.75); // Light gray color for moon surface
+        vec3 craterColor = vec3(0.2, 0.2, 0.2); // Dark color for craters
         
-        float mixStrength = (vElevation + 0.1) * 5.0;
-        vec3 waterColor = mix(waterDeep, waterShallow, mixStrength);
+        // Mix colors based on displacement
+        vec3 finalColor = mix(baseColor, craterColor, smoothstep(-0.02, -0.01, vDisplacement));
         
-        float edge = 1.0 - smoothstep(0.8, 0.95, length(vUv * 2.0 - 1.0));
+        // Add simple shading based on normal
+        float shading = dot(vNormal, normalize(vec3(1.0, 1.0, 1.0)));
+        finalColor *= (0.5 + 0.5 * shading);
         
-        gl_FragColor = vec4(waterColor, edge);
+        gl_FragColor = vec4(finalColor, 1.0);
       }
     `;
 
@@ -60,34 +73,46 @@ function Home(): ReactElement {
       uniforms: {
         time: { value: 0 }
       },
-      transparent: true,
     });
 
-    // Create circular plane geometry
+    // Create sphere geometry
     const radius = 2;
-    const segments = 128;
-    const geometry = new THREE.CircleGeometry(radius, segments);
+    const segments = 128; // Increased for smoother surface
+    const geometry = new THREE.SphereGeometry(radius, segments, segments);
 
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.rotation.x = -Math.PI / 2; // Rotate to lay flat
     scene.add(mesh);
 
-    camera.position.set(0, 3, 3);
-    camera.lookAt(0, 0, 0);
+    camera.position.z = 5;
 
     function animate() {
       requestAnimationFrame(animate);
       
-      // Update time uniform for wave animation
+      // Rotate the moon slowly
+      mesh.rotation.y += 0.005;
+      
+      // Update time uniform for potential animations
       material.uniforms.time.value += 0.03;
       
       renderer.render(scene, camera);
     }
-    animate();
+    
+    let animationFrameId: number;
+    function startAnimation() {
+      animationFrameId = requestAnimationFrame(animate);
+    }
+    startAnimation();
 
     // Clean up
     return () => {
-      mountRef.current?.removeChild(renderer.domElement);
+      cancelAnimationFrame(animationFrameId);
+      if (mountRef.current) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
+      // Dispose of Three.js objects
+      geometry.dispose();
+      material.dispose();
+      renderer.dispose();
     };
   }, []);
 
