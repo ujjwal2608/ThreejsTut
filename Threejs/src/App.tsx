@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import React, { useEffect, useRef } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 const App: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -10,7 +10,12 @@ const App: React.FC = () => {
 
     // Scene setup
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
     const renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
     mountRef.current.appendChild(renderer.domElement);
@@ -20,61 +25,102 @@ const App: React.FC = () => {
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
 
-    // Create plane geometry
-    const geometry = new THREE.PlaneGeometry(2, 2, 256, 256); // Increased resolution
+    // Replace plane geometry with sphere geometry
+    const geometry = new THREE.SphereGeometry(1, 64, 64);
 
-    // Create shader material
+    // Shader code
     const vertexShader = `
-      uniform float time;
-      uniform vec2 mousePos;
       varying vec2 vUv;
       varying float vElevation;
 
-      // Simple pseudo-random function
+      // Improved random function
       float random(vec2 st) {
         return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
       }
 
       void main() {
         vUv = uv;
-        vec3 pos = position;
         
-        // Water waves
-        float distance = length(uv - mousePos);
-        float elevation = sin(distance * 10.0 - time * 2.0) * 0.1;
-        elevation *= smoothstep(0.4, 0.0, distance);
+        // Create a grid effect
+        vec2 gridUv = floor(vUv * 10.0) / 10.0;
         
-        // Spikes
-        float spikeNoise = random(uv * 10.0 + time * 0.1);
-        float spike = pow(spikeNoise, 20.0) * 0.1; // Increased spike height and sharpness
+        // Generate random elevation
+        float elevation = random(gridUv) ; // Reduced strength for subtler effect
         
-        // Combine water waves and spikes
-        pos.z += elevation + spike;
-        vElevation = elevation + spike;
+       
         
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        vElevation = elevation; // Pass elevation to fragment shader
+        vec3 newPosition = vec3(position.x,position.y,position.z+elevation*0.1);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
       }
     `;
 
     const fragmentShader = `
-      uniform vec3 waterColor;
       varying vec2 vUv;
       varying float vElevation;
-
+       float random(vec2 st) {
+    return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+  }
       void main() {
-        vec3 color = mix(waterColor, vec3(1.0), vElevation * 2.0 + 0.5);
-        gl_FragColor = vec4(color, 1.0);
+        // vec3 color = vec3(vUv.x,vUv.x, vUv.x); pattern3-brighness from left to right
+        // vec3 color = vec3(vUv.y);pattern4 brightness from top to bottom
+        // vec3 color = vec3(1.0-vUv.y); pattern5 brightness from bottom to top
+        // vec3 color = vec3(vUv.y*10.0); pattern6 brightness from top to bottom with sudden jump
+        // vec3 color = vec3(sin(vUv.y*40.0));pattern7 black and white stripes with sine wave
+        //vec3 color = vec3(mod(vUv.x*10.0,1.0));pattern8-black and white stripes with modulous function increaee than sudden decrease
+        //vec3 color = vec3(step(0.0,sin(vUv.y*70.0)));//pattern9 sharp black and white stripes with step function
+        //the step[ threshold must be 1 ] so to equal white and black stripes widgth
+        //proper controll over frequency
+        //float stripeFrequency = 10.0;
+        // float stripeWidth = 0.5; // Adjust this value to control the width of the black stripes (0.5 to 1.0)  
+        // float pattern = smoothstep(stripeWidth, stripeWidth +0.1, 0.5 + 0.5 * sin(vUv.y * stripeFrequency * 3.14159));
+        // vec3 color = vec3(pattern);
+
+        //vec3 color = vec3(step(0.0,cos(vUv.y*40.0)*sin(vUv.x*40.0)));//square boxes with sine wave and cosine wave
+          
+        //vec3 color = vec3(step(0.9,mod(vUv.y*10.0,1.0))+step(0.9,mod(vUv.x*10.0,1.0)));//mod is use to make white boundaries
+        //vec3 color = vec3(step(0.2,mod(vUv.y*10.0,1.0))*step(0.2,mod(vUv.x*10.0,1.0)));//dots pattern-threshold of step determines the thicknes and hight od dots
+        
+        // float strength = 1.0;
+        // float barX = step(0.4,mod(vUv.x*10.0,1.0));
+        // float barY = step(0.8,mod(vUv.y*10.0,1.0));
+        // float widthDots = barX * barY;
+        // float barX2 = step(0.8,mod(vUv.x*10.0+0.2,1.0));
+        // float barY2 = step(0.4,mod(vUv.y*10.0-0.2,1.0));
+        // float heightDots = (barX2 * barY2);
+        // strength = heightDots+widthDots;
+
+
+        //vec3 color = vec3(smoothstep(0.0,0.4,mod(vUv.x*10.0,1.0)));
+        
+        //absolute
+        // vec3 color = vec3(abs(vUv.x-0.5));
+        // vec3 color2 = vec3(abs(vUv.y-0.5));
+        // vec3 color3 = vec3(abs(vUv.x-0.5));
+        //  vec3 color4 = vec3(abs(vUv.y-0.5));
+        //  vec3 color5 = color3+color4-color3*color4*2.0;
+
+
+        //min
+        //vec3 color = vec3(step(0.4,max(abs(vUv.x-0.5),abs(vUv.y-0.5))));
+
+        //floor
+       //vec3 color = vec3(floor(vUv.x*10.0)/10.0);
+      //vec3 color = vec3(floor(max(vUv.x * 10.0, vUv.y * 10.0)) / 10.0);
+      //vec3 color = vec3((floor(vUv.x * 10.0) / 10.0)*(floor(vUv.y * 10.0) / 10.0));
+        vec2 gridUv = vec2(
+        floor(vUv.x * 20.0) / 20.0,
+        floor(vUv.y * 20.0) / 20.0
+        );
+float stength = random(gridUv);
+        gl_FragColor = vec4(stength,stength,stength, 1.0);
       }
     `;
 
+    // Create shader material
     const material = new THREE.ShaderMaterial({
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
-      uniforms: {
-        time: { value: 0 },
-        mousePos: { value: new THREE.Vector2(0.5, 0.5) },
-        waterColor: { value: new THREE.Color(0x0077be) }
-      }
     });
 
     // Create mesh and add to scene
@@ -82,26 +128,11 @@ const App: React.FC = () => {
     scene.add(plane);
 
     // Update camera position
-    camera.position.z = 1.5;
-
-    // Mouse interaction
-    const mouse = new THREE.Vector2();
-    const handleMouseMove = (event: MouseEvent) => {
-      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObject(plane);
-      if (intersects.length > 0) {
-        material.uniforms.mousePos.value = intersects[0].uv;
-      }
-    };
-    window.addEventListener('mousemove', handleMouseMove);
+    camera.position.z = 2;
 
     // Animation loop
     const animate = () => {
       requestAnimationFrame(animate);
-      material.uniforms.time.value += 0.01;
       controls.update();
       renderer.render(scene, camera);
     };
@@ -113,18 +144,17 @@ const App: React.FC = () => {
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
-    window.addEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
 
     // Clean up
     return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener("resize", handleResize);
       mountRef.current?.removeChild(renderer.domElement);
       controls.dispose();
     };
   }, []);
 
-  return <div ref={mountRef} />;
+  return <div ref={mountRef} style={{ width: "100%", height: "100vh" }} />;
 };
 
 export default App;
